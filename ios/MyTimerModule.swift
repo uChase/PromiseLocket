@@ -138,13 +138,19 @@ class MyTimerModule : NSObject {
       
       await activity.end(using: nil, dismissalPolicy: .immediate)
       
+      NotificationManagerModule().cancelNotification(identifier: MyTimerModule.timerState["notifId"] as! String)
+      
       MyTimerModule.timerState = [
         "endTime": 0.0,
         "seconds": Int32(0),
         "isPaused": false,
         "activityId": "",
-        "duration": Int32(0)
+        "duration": Int32(0),
+        "notifId": ""
     ]
+      
+    
+      
       
        
     }

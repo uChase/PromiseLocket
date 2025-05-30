@@ -60,6 +60,7 @@ export default function Work() {
     }
   };
 
+  //fix notif
   const handleEnd = () => {
     if (activityId) {
       endTimer(activityId);
