@@ -4,19 +4,24 @@
     "slug": "PromiseLocket",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/MyIcon.png",
     "scheme": "promiselocket",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#112D4E"
+    },
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chaseh.PromiseLocket"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.chaseh.PromiseLocket"
     },
     "web": {
       "bundler": "metro",
@@ -28,10 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#112D4E"
         }
       ]
     ],

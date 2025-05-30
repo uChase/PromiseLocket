@@ -1,0 +1,3 @@
+-alarm
+-calandar
+-app blocker until tasks are finished
