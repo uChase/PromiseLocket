@@ -423,7 +423,10 @@ function ModalForm({
       >
         <Text style={styles.submitText}>Submit</Text>
       </Pressable>
-      <Pressable onPress={() => setModalVisible(false)}>
+      <Pressable
+        style={{ marginTop: 20 }}
+        onPress={() => setModalVisible(false)}
+      >
         <Text style={styles.closeText}>Close</Text>
       </Pressable>
     </SafeAreaView>
@@ -445,18 +448,20 @@ const styles = StyleSheet.create({
   modalContent: {
     width: 300,
     padding: 20,
-    backgroundColor: "white",
+    backgroundColor: "#112D4E",
     borderRadius: 10,
     alignItems: "center",
   },
   modalText: {
     marginBottom: 15,
     fontSize: 18,
+    color: "white",
   },
   modalHeader: {
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
+    color: "white",
   },
   closeText: {
     color: "blue",
@@ -469,12 +474,14 @@ const styles = StyleSheet.create({
     height: 100,
     justifyContent: "center",
     marginBottom: 50,
+    color: "white",
   },
   textInput: {
     width: 260,
     height: 40,
     borderColor: "#ccc",
     borderWidth: 1,
+    color: "white",
     borderRadius: 8,
     paddingHorizontal: 10,
     marginBottom: 20,
