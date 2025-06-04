@@ -4,24 +4,94 @@ import { ThemedView } from "@/components/ThemedView";
 import { Goal } from "@/types/goal";
 import { AntDesign } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GoalsContext } from "../_layout";
+import { useGroups } from "../context/GroupsContext";
+
+function getGroupCompletionStats(goals: Goal[]) {
+  const totalGoals = goals.filter(goal => goal.category !== "Avoid Goal").length;
+  const completedGoals = goals.filter(
+    goal => goal.category !== "Avoid Goal" && goal.todayCompleted
+  ).length;
+  return {
+    total: totalGoals,
+    completed: completedGoals,
+    isFullyCompleted: totalGoals > 0 && completedGoals === totalGoals
+  };
+}
+
+function sortGoalsByCompletion(goals: Goal[]): Goal[] {
+  return [...goals].sort((a, b) => {
+    // For Avoid goals, use todayFailed instead of todayCompleted
+    const aCompleted = a.category === "Avoid Goal" ? a.todayFailed : a.todayCompleted;
+    const bCompleted = b.category === "Avoid Goal" ? b.todayFailed : b.todayCompleted;
+    
+    // Move completed/failed goals to the bottom
+    if (aCompleted && !bCompleted) return 1;
+    if (!aCompleted && bCompleted) return -1;
+    return 0;
+  });
+}
 
 export default function Checklist() {
   const goalsContext = useContext(GoalsContext);
+  const { groups, toggleGroup, setGroups } = useGroups();
+  
   if (!goalsContext) return null;
   const { goals, setGoals } = goalsContext;
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
+
+  const handleDeleteGroup = (groupId: string) => {
+    setGroupToDelete(groupId);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteGroup = () => {
+    if (!groupToDelete) return;
+
+    // Move all goals from the deleted group to ungrouped
+    setGoals(goals.map(goal => 
+      goal.groupId === groupToDelete 
+        ? { ...goal, groupId: undefined }
+        : goal
+    ));
+
+    // Remove the group
+    setGroups(groups.filter(g => g.id !== groupToDelete));
+    
+    setDeleteModalVisible(false);
+    setGroupToDelete(null);
+  };
+
+  const groupedGoals = goals.reduce((acc, goal) => {
+    const groupId = goal.groupId || 'ungrouped';
+    if (!acc[groupId]) {
+      acc[groupId] = [];
+    }
+    acc[groupId].push(goal);
+    return acc;
+  }, {} as Record<string, Goal[]>);
+
+  // Sort goals within each group
+  Object.keys(groupedGoals).forEach(groupId => {
+    groupedGoals[groupId] = sortGoalsByCompletion(groupedGoals[groupId]);
+  });
+
+  // Get completion stats for ungrouped goals
+  const ungroupedStats = getGroupCompletionStats(groupedGoals['ungrouped'] || []);
 
   return (
     <ThemedView
@@ -36,24 +106,127 @@ export default function Checklist() {
       <View style={{ flex: 1, width: "100%" }}>
         <Scroller>
           {goals.length > 0 ? (
-            goals.map((goal, index) => (
-              <GoalItem
-                key={index}
-                goal={goal}
-                setGoals={setGoals}
-                deleteGoal={() => {
-                  const updated = [...goals];
-                  updated.splice(index, 1);
-                  setGoals(updated);
-                }}
-                goals={goals}
-              />
-            ))
+            <>
+              {/* Ungrouped goals with completion ratio */}
+              {groupedGoals['ungrouped']?.length > 0 && (
+                <View style={styles.groupContainer}>
+                  <View
+                    style={[
+                      styles.groupHeader,
+                      ungroupedStats.isFullyCompleted && styles.completedGroupHeader
+                    ]}
+                  >
+                    <Text style={styles.groupTitle}>Ungrouped</Text>
+                    <Text style={styles.completionRatio}>
+                      {ungroupedStats.completed}/{ungroupedStats.total}
+                    </Text>
+                  </View>
+                  {groupedGoals['ungrouped'].map((goal, index) => (
+                    <GoalItem
+                      key={`ungrouped-${index}`}
+                      goal={goal}
+                      setGoals={setGoals}
+                      deleteGoal={() => {
+                        const updated = [...goals];
+                        updated.splice(goals.indexOf(goal), 1);
+                        setGoals(updated);
+                      }}
+                      goals={goals}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Grouped goals with completion ratios */}
+              {groups.map((group) => {
+                const groupGoals = groupedGoals[group.id] || [];
+                const stats = getGroupCompletionStats(groupGoals);
+                
+                return (
+                  <View key={group.id} style={styles.groupContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.groupHeader,
+                        stats.isFullyCompleted && styles.completedGroupHeader
+                      ]}
+                      onPress={() => toggleGroup(group.id)}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={styles.groupTitle}>{group.name}</Text>
+                        <Text style={styles.completionRatio}>
+                          {stats.completed}/{stats.total}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteGroup(group.id)}
+                          style={styles.deleteButton}
+                        >
+                          <AntDesign name="delete" size={20} color="#FF6B6B" />
+                        </TouchableOpacity>
+                        <AntDesign
+                          name={group.isExpanded ? "caretup" : "caretdown"}
+                          size={16}
+                          color="#666"
+                          style={{ marginLeft: 8 }}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                    {group.isExpanded && groupGoals.map((goal, index) => (
+                      <GoalItem
+                        key={`${group.id}-${index}`}
+                        goal={goal}
+                        setGoals={setGoals}
+                        deleteGoal={() => {
+                          const updated = [...goals];
+                          updated.splice(goals.indexOf(goal), 1);
+                          setGoals(updated);
+                        }}
+                        goals={goals}
+                      />
+                    ))}
+                  </View>
+                );
+              })}
+            </>
           ) : (
             <Text>No goals set yet.</Text>
           )}
         </Scroller>
       </View>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setDeleteModalVisible(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalHeader}>Delete Group?</Text>
+            <Text style={styles.modalText}>
+              This will move all goals in this group to ungrouped. This action cannot be undone.
+            </Text>
+            <Pressable
+              style={[styles.submitButton, { backgroundColor: '#FF6B6B' }]}
+              onPress={confirmDeleteGroup}
+            >
+              <Text style={styles.submitText}>Delete Group</Text>
+            </Pressable>
+            <Pressable
+              style={{ marginTop: 20 }}
+              onPress={() => setDeleteModalVisible(false)}
+            >
+              <Text style={styles.closeText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <ModalContent
         modalVisible={modalVisible}
         setModalVisible={setModalVisible}
@@ -104,6 +277,7 @@ function GoalItem({
   useEffect(() => {
     setCompleted(goal.todayCompleted || false);
     setFailed(goal.todayFailed || false);
+    setTempStreak(goal.currentStreak || 0);
     if (goal.todayCompleted) {
       setTempStreak((goal.currentStreak ?? 0) + 1);
     }
@@ -333,6 +507,7 @@ function ModalForm({
   goal?: Goal;
   editMode?: boolean;
 }) {
+  const { groups, addGroup } = useGroups();
   const [selectedCategory, setSelectedCategory] = useState<
     "Completion Goal" | "Time Goal" | "Avoid Goal" | "Project"
   >(editMode && goal ? goal.category : "Completion Goal");
@@ -340,16 +515,35 @@ function ModalForm({
   const [timeGoal, setTimeGoal] = useState(
     editMode && goal && goal.timeGoal != null ? goal.timeGoal : 0
   );
+  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(
+    editMode && goal ? goal.groupId : undefined
+  );
+  const [newGroupName, setNewGroupName] = useState("");
+  const [isAddingNewGroup, setIsAddingNewGroup] = useState(false);
 
   useEffect(() => {
     if (editMode && goal) {
       setSelectedCategory(goal.category);
       setGoalName(goal.name);
       setTimeGoal(goal.timeGoal ?? 0);
+      setSelectedGroupId(goal.groupId);
     }
   }, [editMode, goal]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    let finalGroupId = selectedGroupId;
+
+    // Handle new group creation first
+    if (isAddingNewGroup && newGroupName.trim()) {
+      try {
+        finalGroupId = await addGroup(newGroupName.trim());
+      } catch (error) {
+        console.error('Error creating new group:', error);
+        return;
+      }
+    }
+
+    // Create or update the goal with the correct group ID
     if (editMode && goal && goals && setGoals) {
       const updatedGoals = goals.map((g) =>
         g.name === goal.name && g.category === goal.category
@@ -358,20 +552,21 @@ function ModalForm({
               name: goalName.trim(),
               category: selectedCategory,
               timeGoal: selectedCategory === "Time Goal" ? timeGoal : undefined,
+              groupId: finalGroupId,
             }
           : g
       );
       setGoals(updatedGoals);
-    } else {
+    } else if (setGoals) {
       const newGoal: Goal = {
         name: goalName.trim(),
         category: selectedCategory,
         timeGoal: selectedCategory === "Time Goal" ? timeGoal : undefined,
+        groupId: finalGroupId,
       };
-      if (setGoals) {
-        setGoals([...(goals || []), newGoal]);
-      }
+      setGoals([...(goals || []), newGoal]);
     }
+
     setModalVisible(false);
   };
 
@@ -384,6 +579,7 @@ function ModalForm({
         <Picker
           selectedValue={selectedCategory}
           onValueChange={(itemValue) => setSelectedCategory(itemValue)}
+          style={{ color: 'white' }}
         >
           <Picker.Item label="Completion Goal" value="Completion Goal" />
           <Picker.Item label="Time Goal" value="Time Goal" />
@@ -398,6 +594,7 @@ function ModalForm({
         style={styles.textInput}
         multiline={false}
         numberOfLines={1}
+        placeholderTextColor="#999"
       />
       {selectedCategory === "Time Goal" && (
         <>
@@ -413,13 +610,45 @@ function ModalForm({
               setTimeGoal(isNaN(value) ? 0 : value);
             }}
             value={timeGoal ? timeGoal.toString() : ""}
+            placeholderTextColor="#999"
           />
         </>
       )}
+
+      <View style={styles.groupSection}>
+        <Text style={styles.modalText}>Assign to Group</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedGroupId}
+            onValueChange={(itemValue) => {
+              setSelectedGroupId(itemValue);
+              setIsAddingNewGroup(itemValue === "new");
+            }}
+            style={{ color: 'white' }}
+          >
+            <Picker.Item label="No Group" value={undefined} />
+            {groups.map((group) => (
+              <Picker.Item key={group.id} label={group.name} value={group.id} />
+            ))}
+            <Picker.Item label="+ Create New Group" value="new" />
+          </Picker>
+        </View>
+
+        {isAddingNewGroup && (
+          <TextInput
+            placeholder="Enter new group name"
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            style={styles.textInput}
+            placeholderTextColor="#999"
+          />
+        )}
+      </View>
+
       <Pressable
         style={styles.submitButton}
         onPress={handleSubmit}
-        disabled={!goalName.trim()}
+        disabled={!goalName.trim() || (isAddingNewGroup && !newGroupName.trim())}
       >
         <Text style={styles.submitText}>Submit</Text>
       </Pressable>
@@ -498,5 +727,40 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "bold",
     textAlign: "center",
+  },
+  groupContainer: {
+    marginVertical: 8,
+    width: "100%",
+  },
+  groupHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#3F72AF",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  completedGroupHeader: {
+    backgroundColor: "#9DC08B",
+  },
+  groupTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "white",
+    marginRight: 8,
+  },
+  completionRatio: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    opacity: 0.9,
+  },
+  groupSection: {
+    width: "100%",
+    marginBottom: 20,
+  },
+  deleteButton: {
+    padding: 4,
   },
 });

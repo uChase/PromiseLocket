@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack } from "expo-router";
 import React, { createContext, useEffect, useRef } from "react";
 import { AppState } from "react-native";
+import { GroupsProvider } from './context/GroupsContext';
 
 export const GoalsContext = createContext<{
   goals: Goal[];
@@ -102,10 +103,12 @@ export default function RootLayout() {
 
   return (
     <GoalsContext.Provider value={{ goals, setGoals }}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" options={{ title: "Oops!" }} />
-      </Stack>
+      <GroupsProvider>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" options={{ title: "Oops!" }} />
+        </Stack>
+      </GroupsProvider>
     </GoalsContext.Provider>
   );
 }
